@@ -7,6 +7,7 @@ export default function Login() {
     const [data, setData] = useState({ email: "", password: "" });
 
     const handleSubmit = async (e) => {
+        console.log("Submitting login form");
         e.preventDefault();
         const res = await api.post("/auth/login", data);
         login(res.data);

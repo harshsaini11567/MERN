@@ -19,6 +19,7 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
+    console.log("Login request received");
     const { email, password } = req.body;
 
     try {
