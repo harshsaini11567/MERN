@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center">
+
+  <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md">
+    <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">
+      Login
+    </h2>
+
+    <div class="space-y-4">
+      <input
+        id="u"
+        placeholder="Username"
+        class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+
+      <input
+        id="p"
+        type="password"
+        placeholder="Password"
+        class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+
+      <button
+        onclick="login()"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition"
+      >
+        Login
+      </button>
+
+      <p id="error" class="text-red-500 text-center text-sm hidden"></p>
+    </div>
+
+    <p class="text-center text-sm mt-4 text-gray-600">
+      Don't have an account?
+      <a href="/register" class="text-indigo-600 font-semibold hover:underline">
+        Register
+      </a>
+    </p>
+  </div>
+
+  <script>
+    async function login() {
+      const u = document.getElementById("u");
+      const p = document.getElementById("p");
+      const error = document.getElementById("error");
+
+      error.classList.add("hidden");
+
+      if (!u.value || !p.value) {
+        error.innerText = "All fields are required";
+        error.classList.remove("hidden");
+        return;
+      }
+
+      try {
+        const res = await fetch("/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: u.value.trim(),
+            password: p.value
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          error.innerText = data.error;
+          error.classList.remove("hidden");
+          return;
+        }
+
+        localStorage.setItem("user", data.username);
+        localStorage.setItem("token", data.token);
+
+        location.href = "/chat";
+      } catch (err) {
+        error.innerText = "Server error. Try again.";
+        error.classList.remove("hidden");
+      }
+    }
+  </script>
+</body>
+</html>

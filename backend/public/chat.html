@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body class="bg-gray-100 h-screen flex">
+
+<!-- Sidebar -->
+<div class="w-1/4 bg-white border-r">
+  <h2 class="p-4 font-bold text-xl border-b">Chats</h2>
+  <input id="to" placeholder="Username"
+    class="m-4 p-2 w-[90%] border rounded">
+  <ul id="users" class="p-4 space-y-2">
+    <!-- User list will be populated here --> 
+  </ul>
+</div>
+
+<!-- Chat Area -->
+<div class="flex-1 flex flex-col">
+  <div class="bg-green-600 text-white p-4 font-semibold">
+    Chat Window
+  </div>
+  <ul id="chat" class="flex-1 p-4 overflow-y-auto space-y-2"></ul>
+
+
+  <div class="p-4 flex gap-2 border-t bg-white">
+    <input id="msg" placeholder="Message"
+      class="flex-1 p-2 border rounded">
+    <button onclick="send()"
+      class="bg-green-600 text-white px-4 rounded">
+      Send
+    </button>
+  </div>
+</div>
+
+<script>
+/* =========================
+   CHECK USER LOGIN STATUS
+   ========================= */
+
+// Get logged-in username from localStorage
+const user = localStorage.getItem("user");
+
+// If user not logged in → redirect to login page
+if (!user) location.href = "/login";
+
+
+/* =========================
+   VARIABLES & STATE
+   ========================= */
+
+// Store the currently selected chat user
+let currentChatUser = null;
+
+
+/* =========================
+   SOCKET.IO CONNECTION
+   ========================= */
+
+// Connect browser to Socket.IO server
+const socket = io();
+
+// Tell server that this user has joined
+socket.emit("join", user);
+
+
+/* =========================
+   DOM ELEMENT REFERENCES
+   ========================= */
+
+// User list on left sidebar
+const usersList = document.getElementById("users");
+
+// Chat messages container
+const chatBox = document.getElementById("chat");
+
+
+/* =========================
+   RECEIVE ONLINE USERS LIST
+   ========================= */
+
+// Server sends updated list of online users
+socket.on("onlineUsers", users => {
+
+  // Clear old user list
+  usersList.innerHTML = "";
+
+  // Loop through online users
+  users.forEach(u => {
+
+    // Do not show yourself in the list
+    if (u === user) return;
+
+    // Create a list item for each user
+    const li = document.createElement("li");
+
+    // Styling for user item
+    li.className =
+      "p-2 rounded cursor-pointer hover:bg-green-100";
+
+    // User display with green online dot
+    li.innerHTML = `
+      <div class="flex items-center gap-2">
+        <span class="h-2 w-2 bg-green-500 rounded-full"></span>
+        <span>${u}</span>
+      </div>
+    `;
+
+    // When user is clicked → open chat
+    li.onclick = () => selectUser(u);
+
+    // Add user to sidebar
+    usersList.appendChild(li);
+  });
+});
+
+
+/* =========================
+   SELECT USER & LOAD CHAT
+   ========================= */
+
+async function selectUser(selectedUser){
+
+  // Set current chat user
+  currentChatUser = selectedUser;
+
+  // Show selected username in input box
+  document.getElementById("to").value = selectedUser;
+
+  // Clear previous chat messages
+  chatBox.innerHTML = "";
+
+  // Fetch old messages from backend
+  const res = await fetch(`/messages/${user}/${selectedUser}`);
+
+  // Convert response to JSON
+  const messages = await res.json();
+
+  // Display previous messages
+  messages.forEach(m => {
+
+    // If message sent by me
+    if (m.sender === user) {
+      addMsg("You", m.message);
+    } 
+    // Message sent by other user
+    else {
+      addMsg(m.sender, m.message);
+    }
+  });
+}
+
+
+/* =========================
+   SEND MESSAGE
+   ========================= */
+
+function send(){
+
+  // Do nothing if message empty or no user selected
+  if(!msg.value || !currentChatUser) return;
+
+  // Send message to server using Socket.IO
+  socket.emit("sendMessage", {
+    sender: user,
+    receiver: currentChatUser,
+    message: msg.value
+  });
+
+  // Show message immediately in UI
+  addMsg("You", msg.value);
+
+  // Clear input box
+  msg.value = "";
+}
+
+
+/* =========================
+   RECEIVE MESSAGE
+   ========================= */
+
+// Listen for incoming messages
+socket.on("receiveMessage", data => {
+
+  // Show message only if chat is currently open
+  if (data.sender === currentChatUser) {
+    addMsg(data.sender, data.message);
+  }
+});
+
+
+/* =========================
+   ADD MESSAGE TO UI
+   ========================= */
+
+function addMsg(sender, message){
+
+  // Create list item for message
+  const li = document.createElement("li");
+
+  // Align message left or right
+  li.className =
+    sender === "You" ? "text-right" : "text-left";
+
+  // Message bubble HTML
+  li.innerHTML = `
+    <span class="inline-block px-4 py-2 rounded-lg
+      ${sender === "You"
+        ? "bg-green-500 text-white"
+        : "bg-white border"}">
+      <b>${sender}:</b> ${message}
+    </span>
+  `;
+
+  // Add message to chat box
+  chatBox.appendChild(li);
+
+  // Auto-scroll to latest message
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+</script>
+
+
+</body>
+</html>
