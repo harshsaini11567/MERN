@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -8,221 +9,163 @@
 
 <body class="bg-gray-100 h-screen flex">
 
-<!-- Sidebar -->
-<div class="w-1/4 bg-white border-r">
-  <h2 class="p-4 font-bold text-xl border-b">Chats</h2>
-  <input id="to" placeholder="Username"
-    class="m-4 p-2 w-[90%] border rounded">
-  <ul id="users" class="p-4 space-y-2">
-    <!-- User list will be populated here --> 
-  </ul>
-</div>
-
-<!-- Chat Area -->
-<div class="flex-1 flex flex-col">
-  <div class="bg-green-600 text-white p-4 font-semibold">
-    Chat Window
+  <!-- Sidebar -->
+  <div class="w-1/4 bg-white border-r">
+    <h2 class="p-4 font-bold text-xl border-b">Chats</h2>
+    <ul id="users" class="p-4 space-y-2"></ul>
   </div>
-  <ul id="chat" class="flex-1 p-4 overflow-y-auto space-y-2"></ul>
 
+  <!-- Chat Area -->
+  <div class="flex-1 flex flex-col">
+    <div class="bg-green-600 text-white p-4 font-semibold">
+      Chat Window
+    </div>
 
-  <div class="p-4 flex gap-2 border-t bg-white">
-    <input id="msg" placeholder="Message"
-      class="flex-1 p-2 border rounded">
-    <button onclick="send()"
-      class="bg-green-600 text-white px-4 rounded">
-      Send
-    </button>
+    <ul id="chat" class="flex-1 p-4 overflow-y-auto space-y-2"></ul>
+
+    <div class="p-4 flex gap-2 border-t bg-white">
+      <input id="msg" placeholder="Message" class="flex-1 p-2 border rounded">
+      <button onclick="send()" class="bg-green-600 text-white px-4 rounded">
+        Send
+      </button>
+    </div>
   </div>
-</div>
 
-<script>
-/* =========================
-   CHECK USER LOGIN STATUS
-   ========================= */
+  <script>
+    // ================= AUTH CHECK =================
+    const user = localStorage.getItem("user");
+    if (!user) location.href = "/login";
 
-// Get logged-in username from localStorage
-const user = localStorage.getItem("user");
+    // ================= STATE =================
+    let currentChatUser = null;
+    let allUsers = [];
+    let onlineUsers = [];
 
-// If user not logged in → redirect to login page
-if (!user) location.href = "/login";
+    // ================= SOCKET =================
+    const socket = io();
+    socket.emit("join", user);
 
+    // ================= DOM =================
+    const usersList = document.getElementById("users");
+    const chatBox = document.getElementById("chat");
 
-/* =========================
-   VARIABLES & STATE
-   ========================= */
+    // ================= HELPERS =================
+    function getInitial(name) {
+      return name.charAt(0).toUpperCase();
+    }
 
-// Store the currently selected chat user
-let currentChatUser = null;
+    function getColor(name) {
+      const colors = [
+        "bg-purple-500", "bg-blue-500", "bg-green-500",
+        "bg-pink-500", "bg-yellow-500", "bg-indigo-500", "bg-red-500"
+      ];
+      let hash = 0;
+      for (let c of name) hash += c.charCodeAt(0);
+      return colors[hash % colors.length];
+    }
 
+    // ================= FETCH USERS =================
+    async function fetchAllUsers() {
+      const res = await fetch("/users");
+      allUsers = await res.json();
+      renderUsers();
+    }
+    fetchAllUsers();
 
-/* =========================
-   SOCKET.IO CONNECTION
-   ========================= */
+    // ================= ONLINE USERS =================
+    socket.on("onlineUsers", users => {
+      onlineUsers = users;
+      renderUsers();
+    });
 
-// Connect browser to Socket.IO server
-const socket = io();
+    // ================= RENDER USERS =================
+    function renderUsers() {
+      usersList.innerHTML = "";
 
-// Tell server that this user has joined
-socket.emit("join", user);
+      allUsers.forEach(u => {
+        if (u.username === user) return;
 
+        const isOnline = onlineUsers.includes(u.username);
 
-/* =========================
-   DOM ELEMENT REFERENCES
-   ========================= */
+        const li = document.createElement("li");
+        li.className =
+          "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-100";
 
-// User list on left sidebar
-const usersList = document.getElementById("users");
-
-// Chat messages container
-const chatBox = document.getElementById("chat");
-
-
-/* =========================
-   RECEIVE ONLINE USERS LIST
-   ========================= */
-
-// Server sends updated list of online users
-socket.on("onlineUsers", users => {
-
-  // Clear old user list
-  usersList.innerHTML = "";
-
-  // Loop through online users
-  users.forEach(u => {
-
-    // Do not show yourself in the list
-    if (u === user) return;
-
-    // Create a list item for each user
-    const li = document.createElement("li");
-
-    // Styling for user item
-    li.className =
-      "p-2 rounded cursor-pointer hover:bg-green-100";
-
-    // User display with green online dot
-    li.innerHTML = `
-      <div class="flex items-center gap-2">
-        <span class="h-2 w-2 bg-green-500 rounded-full"></span>
-        <span>${u}</span>
+        li.innerHTML = `
+      <div class="relative">
+        <div class="h-10 w-10 rounded-full flex items-center justify-center
+          text-white font-bold ${getColor(u.username)}">
+          ${getInitial(u.username)}
+        </div>
+        <span class="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white
+          ${isOnline ? "bg-green-500" : "bg-red-500"}"></span>
       </div>
+      <span>${u.username}</span>
     `;
 
-    // When user is clicked → open chat
-    li.onclick = () => selectUser(u);
-
-    // Add user to sidebar
-    usersList.appendChild(li);
-  });
-});
-
-
-/* =========================
-   SELECT USER & LOAD CHAT
-   ========================= */
-
-async function selectUser(selectedUser){
-
-  // Set current chat user
-  currentChatUser = selectedUser;
-
-  // Show selected username in input box
-  document.getElementById("to").value = selectedUser;
-
-  // Clear previous chat messages
-  chatBox.innerHTML = "";
-
-  // Fetch old messages from backend
-  const res = await fetch(`/messages/${user}/${selectedUser}`);
-
-  // Convert response to JSON
-  const messages = await res.json();
-
-  // Display previous messages
-  messages.forEach(m => {
-
-    // If message sent by me
-    if (m.sender === user) {
-      addMsg("You", m.message);
-    } 
-    // Message sent by other user
-    else {
-      addMsg(m.sender, m.message);
+        li.onclick = () => selectUser(u.username);
+        usersList.appendChild(li);
+      });
     }
-  });
-}
 
+    // ================= LOAD CHAT =================
+    async function selectUser(selectedUser) {
+      currentChatUser = selectedUser;
+      chatBox.innerHTML = "";
 
-/* =========================
-   SEND MESSAGE
-   ========================= */
+      const res = await fetch(`/messages/${user}/${selectedUser}`);
+      const messages = await res.json();
 
-function send(){
+      messages.forEach(m => {
+        addMsg(m.sender === user ? "You" : m.sender, m.message);
+      });
+    }
 
-  // Do nothing if message empty or no user selected
-  if(!msg.value || !currentChatUser) return;
+    // ================= SEND MESSAGE =================
+    function send() {
+      if (!msg.value || !currentChatUser) return;
 
-  // Send message to server using Socket.IO
-  socket.emit("sendMessage", {
-    sender: user,
-    receiver: currentChatUser,
-    message: msg.value
-  });
+      socket.emit("sendMessage", {
+        sender: user,
+        receiver: currentChatUser,
+        message: msg.value
+      });
 
-  // Show message immediately in UI
-  addMsg("You", msg.value);
+      addMsg("You", msg.value);
+      msg.value = "";
+    }
 
-  // Clear input box
-  msg.value = "";
-}
+    // ================= RECEIVE MESSAGE =================
+    socket.on("receiveMessage", data => {
+      if (data.sender === currentChatUser) {
+        addMsg(data.sender, data.message);
+      }
+    });
 
+    // ================= ADD MESSAGE =================
+    function addMsg(sender, message) {
+      const isMe = sender === "You";
 
-/* =========================
-   RECEIVE MESSAGE
-   ========================= */
+      const li = document.createElement("li");
+      li.className = `flex ${isMe ? "justify-end" : "justify-start"} gap-2`;
 
-// Listen for incoming messages
-socket.on("receiveMessage", data => {
-
-  // Show message only if chat is currently open
-  if (data.sender === currentChatUser) {
-    addMsg(data.sender, data.message);
-  }
-});
-
-
-/* =========================
-   ADD MESSAGE TO UI
-   ========================= */
-
-function addMsg(sender, message){
-
-  // Create list item for message
-  const li = document.createElement("li");
-
-  // Align message left or right
-  li.className =
-    sender === "You" ? "text-right" : "text-left";
-
-  // Message bubble HTML
-  li.innerHTML = `
-    <span class="inline-block px-4 py-2 rounded-lg
-      ${sender === "You"
-        ? "bg-green-500 text-white"
-        : "bg-white border"}">
+      li.innerHTML = `
+    ${!isMe ? `
+      <div class="h-8 w-8 rounded-full flex items-center justify-center
+        text-white text-sm font-bold ${getColor(sender)}">
+        ${getInitial(sender)}
+      </div>` : ""}
+    <div class="px-4 py-2 rounded-lg max-w-xs
+      ${isMe ? "bg-green-500 text-white" : "bg-white border"}">
       <b>${sender}:</b> ${message}
-    </span>
+    </div>
   `;
 
-  // Add message to chat box
-  chatBox.appendChild(li);
-
-  // Auto-scroll to latest message
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-</script>
-
+      chatBox.appendChild(li);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  </script>
 
 </body>
+
 </html>
